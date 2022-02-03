@@ -1,0 +1,161 @@
+plugins {
+	id 'com.github.johnrengelman.shadow' version '7.1.0'
+	id 'java-library'
+	id "name.remal.sonarlint" version "1.5.0"
+	id 'jacoco'
+	id 'checkstyle'
+}
+
+sourceSets {
+	integrationTest {
+		compileClasspath += main.output + test.output
+		runtimeClasspath += main.output + test.output
+		java.srcDir files('src/integration-test/java')
+		resources.srcDir files('src/integration-test/resources')
+	}
+	functionalTest {
+		compileClasspath += main.output + test.output
+		runtimeClasspath += main.output + test.output
+		java.srcDir files('src/functional-test/java')
+		resources.srcDir files('src/functional-test/resources')
+	}
+}
+
+configurations {
+	functionalTestImplementation.extendsFrom testImplementation
+	functionalTestRuntimeOnly.extendsFrom testRuntimeOnly
+
+	integrationTestImplementation.extendsFrom testImplementation
+	integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
+repositories {
+	mavenCentral()
+	maven {
+		url "https://cdn.dreambot.org/maven/"
+	}
+}
+
+group = 'com.github.zachsand'
+version = '0.0.1'
+sourceCompatibility = '8'
+
+dependencies {
+	implementation 'org.dreambot:client:3.0.0'
+	api 'org.springframework.statemachine:spring-statemachine-core:3.0.1'
+	api 'org.springframework:spring-context:5.3.8'
+	api 'org.springframework.security:spring-security-core:5.3.8.RELEASE'
+	implementation 'org.apache.httpcomponents.client5:httpclient5-fluent:5.1'
+
+	testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.1'
+	testImplementation 'org.springframework.statemachine:spring-statemachine-test:3.0.1'
+	testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.1'
+
+	functionalTestImplementation sourceSets.main.output
+	integrationTestImplementation sourceSets.main.output
+}
+
+shadowJar {
+	archiveBaseName.set('osrs-dreambot-scripts')
+	archiveClassifier.set(null)
+}
+
+test {
+	useJUnitPlatform()
+	finalizedBy jacocoTestReport
+
+	// Execute classes and methods in parallel
+	systemProperties = [
+			'junit.jupiter.execution.parallel.enabled'             : 'true',
+			'junit.jupiter.execution.parallel.mode.default'        : 'concurrent',
+			'junit.jupiter.execution.parallel.mode.classes.default': 'concurrent'
+	]
+}
+
+task integrationTest(type: Test, dependsOn: [integrationTestClasses]) {
+	useJUnitPlatform()
+	outputs.upToDateWhen { false }
+	testLogging {
+		showStandardStreams = true
+		exceptionFormat = 'full'
+	}
+	jacoco {
+		destinationFile = file("${buildDir}/jacoco/integration-test.exec")
+	}
+	testClassesDirs = files(sourceSets.integrationTest.java.outputDir)
+	classpath += files(sourceSets.integrationTest.runtimeClasspath)
+
+	// Execute top-level classes in parallel but methods in same thread
+	systemProperties = [
+			'junit.jupiter.execution.parallel.enabled'             : 'true',
+			'junit.jupiter.execution.parallel.mode.default'        : 'same_thread',
+			'junit.jupiter.execution.parallel.mode.classes.default': 'concurrent'
+	]
+}
+
+task functionalTest(type: Test, dependsOn: [functionalTestClasses]) {
+	useJUnitPlatform()
+	outputs.upToDateWhen { false }
+	testLogging {
+		showStandardStreams = true
+		exceptionFormat = 'full'
+	}
+	jacoco {
+		destinationFile = file("${buildDir}/jacoco/functional-test.exec")
+	}
+	testClassesDirs = files(sourceSets.functionalTest.java.outputDir)
+	classpath += files(sourceSets.functionalTest.runtimeClasspath)
+}
+
+jacocoTestReport {
+	getExecutionData().from(fileTree("${buildDir}/jacoco").include("*.exec"))
+	reports {
+		xml.enabled true
+	}
+	mustRunAfter integrationTest
+	afterEvaluate {
+		classDirectories.setFrom(files(classDirectories.files.collect {
+			fileTree(dir: it, exclude: [
+					'com/github/zachsand/osrs/dreambot/scripts/model',
+					'com/github/zachsand/osrs/dreambot/scripts/constants'])
+		}))
+	}
+}
+
+jacocoTestCoverageVerification {
+	getExecutionData().from(fileTree("${buildDir}/jacoco").include("*.exec"))
+	mustRunAfter integrationTest
+	violationRules {
+		rule {
+			limit {
+				counter = 'INSTRUCTION'
+				minimum = 0.50
+			}
+			limit {
+				counter = 'CLASS'
+				minimum = 0.50
+			}
+		}
+	}
+	afterEvaluate {
+		classDirectories.setFrom(files(classDirectories.files.collect {
+			fileTree(dir: it, exclude: [
+					'com/github/zachsand/osrs/dreambot/scripts/model',
+					'com/github/zachsand/osrs/dreambot/scripts/constants'])
+		}))
+	}
+}
+
+task copyJar(type: Copy) {
+	dependsOn shadowJar
+	from "build/libs/${rootProject.name}-${version}.jar"
+	into "/Users/zacharysanders/DreamBot/Scripts"
+}
+
+task all {
+	dependsOn build, functionalTest, integrationTest, jacocoTestReport, jacocoTestCoverageVerification, shadowJar, copyJar
+}
+
+wrapper {
+	gradleVersion = '7.0.2'
+}

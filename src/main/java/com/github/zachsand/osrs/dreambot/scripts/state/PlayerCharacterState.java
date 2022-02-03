@@ -1,0 +1,15 @@
+package com.github.zachsand.osrs.dreambot.scripts.state;
+
+public enum PlayerCharacterState {
+	INITIAL,
+	WALKING_TO_VARROCK_EAST_BANK,
+	BANKING,
+	WALKING_TO_SEWER,
+	AT_SEWER_MANHOLE,
+	COLLECTING_LOG,
+	COOKING,
+	WAITING_FOR_HEALTH,
+	ENTERING_SEWER,
+	ENTERING_COMBAT,
+	LEAVING_SEWER,
+}
